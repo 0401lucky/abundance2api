@@ -102,6 +102,7 @@ MAX_FULL_PROMPT_RECENT_MESSAGES = max(2, env_int("MAX_FULL_PROMPT_RECENT_MESSAGE
 MAX_FULL_PROMPT_MESSAGE_CHARS = max(500, env_int("MAX_FULL_PROMPT_MESSAGE_CHARS", 4000))
 MAX_UPSTREAM_CONTENT_CHARS = max(2000, env_int("MAX_UPSTREAM_CONTENT_CHARS", 32000))
 MAX_UPSTREAM_RETRY_CONTENT_CHARS = max(2000, env_int("MAX_UPSTREAM_RETRY_CONTENT_CHARS", 16000))
+MAX_UPSTREAM_MINIMAL_CONTENT_CHARS = max(2000, env_int("MAX_UPSTREAM_MINIMAL_CONTENT_CHARS", 8000))
 ABUNDANCE_USER_AGENT = os.getenv(
     "ABUNDANCE_USER_AGENT",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -815,15 +816,32 @@ def limit_upstream_content(
 
 def upstream_content_variants(content: str) -> List[tuple[str, str]]:
     primary = limit_upstream_content(content, MAX_UPSTREAM_CONTENT_CHARS, "Context Truncated")
-    variants = [("primary", primary)]
+    variants: List[tuple[str, str]] = []
+    seen_content = set()
+
+    def add_variant(label: str, value: str) -> None:
+        if value and value not in seen_content:
+            variants.append((label, value))
+            seen_content.add(value)
+
+    add_variant("primary", primary)
 
     retry_limit = min(MAX_UPSTREAM_RETRY_CONTENT_CHARS, MAX_UPSTREAM_CONTENT_CHARS)
     if retry_limit < len(primary):
-        variants.append(("short-fallback", limit_upstream_content(
+        add_variant("short-fallback", limit_upstream_content(
             primary,
             retry_limit,
             "Retry Context Truncated"
-        )))
+        ))
+
+    minimal_limit = min(MAX_UPSTREAM_MINIMAL_CONTENT_CHARS, retry_limit, MAX_UPSTREAM_CONTENT_CHARS)
+    if minimal_limit < len(primary):
+        add_variant("minimal-fallback", limit_upstream_content(
+            primary,
+            minimal_limit,
+            "Minimal Retry Context Truncated"
+        ))
+
     return variants
 
 
@@ -1750,11 +1768,18 @@ def call_abundance_api_with_account_fallback(
     last_exc: Optional[Exception] = None
 
     for content_index, (content_label, candidate_content) in enumerate(content_variants):
-        for account_index, candidate in enumerate(candidates):
+        attempts: List[tuple[Dict[str, Any], bool, str]] = []
+        if content_index == 0:
+            attempts.append((account, True, "existing-conversation"))
+        attempts.append((account, False, "fresh-conversation"))
+        attempts.extend((candidate, False, "alternate-account") for candidate in candidates[1:])
+
+        for attempt_index, (candidate, use_existing_conversation, attempt_label) in enumerate(attempts):
             try:
-                is_first_attempt = content_index == 0 and account_index == 0
-                candidate_conversation_id = conversation_id
-                if not is_first_attempt:
+                is_first_attempt = content_index == 0 and attempt_index == 0
+                if use_existing_conversation:
+                    candidate_conversation_id = conversation_id
+                else:
                     candidate_conversation_id = create_abundance_conversation(candidate)
 
                 resp = call_abundance_api(candidate, candidate_conversation_id, candidate_content, model)
@@ -1762,8 +1787,9 @@ def call_abundance_api_with_account_fallback(
                     remember_conversation_id(session_key, candidate_conversation_id)
                     remember_conversation_account(session_key, candidate)
                     logger.info(
-                        "Recovered a.b.u.n.dance send-message with account=%s content_variant=%s content_len=%s",
+                        "Recovered a.b.u.n.dance send-message with account=%s retry=%s content_variant=%s content_len=%s",
                         account_name(candidate),
+                        attempt_label,
                         content_label,
                         len(candidate_content)
                     )
@@ -1773,22 +1799,30 @@ def call_abundance_api_with_account_fallback(
                 if not should_retry_abundance_request(exc):
                     raise
 
-                has_next_account = account_index + 1 < len(candidates)
+                has_next_attempt = attempt_index + 1 < len(attempts)
                 has_shorter_content = (
                     content_index + 1 < len(content_variants)
                     and should_retry_shorter_content(exc)
                 )
-                if not has_next_account and not has_shorter_content:
+                if not has_next_attempt and not has_shorter_content:
                     raise
 
-                if has_next_account:
+                if has_next_attempt:
+                    next_candidate, next_uses_existing, next_label = attempts[attempt_index + 1]
+                    next_target = (
+                        f"existing conversation on {account_name(next_candidate)}"
+                        if next_uses_existing
+                        else f"fresh conversation on {account_name(next_candidate)}"
+                    )
                     logger.warning(
-                        "a.b.u.n.dance send-message failed on %s with %s content (%s chars): %s; retrying with %s",
+                        "a.b.u.n.dance send-message failed on %s with %s content (%s chars) via %s: %s; retrying with %s (%s)",
                         account_name(candidate),
                         content_label,
                         len(candidate_content),
+                        attempt_label,
                         exception_message(exc),
-                        account_name(candidates[account_index + 1])
+                        next_target,
+                        next_label
                     )
                     continue
 

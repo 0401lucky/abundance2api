@@ -66,6 +66,7 @@ Invoke-RestMethod http://127.0.0.1:18000/healthz
 - `MAX_FULL_PROMPT_MESSAGE_CHARS`：默认 `4000`，单条历史消息超过后会裁剪。
 - `MAX_UPSTREAM_CONTENT_CHARS`：默认 `32000`，正常尝试发给上游的正文硬上限。
 - `MAX_UPSTREAM_RETRY_CONTENT_CHARS`：默认 `16000`，长上下文被上游拒绝时自动降级重试的正文上限。角色扮演场景可以把 `MAX_UPSTREAM_CONTENT_CHARS` 调到 `40000` 或 `48000`，但建议保留这个降级值。
+- `MAX_UPSTREAM_MINIMAL_CONTENT_CHARS`：默认 `8000`，上游继续返回 400/413/422 时使用的最后兜底正文上限。
 - `ABUNDANCE_HTTP_PROXY`：需要代理访问上游时设置。
 - `PORT`：Zeabur 通常会自动注入；未设置时默认 `18000`。
 
