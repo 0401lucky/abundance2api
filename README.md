@@ -42,8 +42,8 @@ Invoke-RestMethod http://127.0.0.1:18000/healthz
 可选配置：
 
 - `ABUNDANCE_BASE_URL`：默认 `https://a.b.u.n.dance`。
-- `ABUNDANCE_DEFAULT_SPEED`：默认 `default`。
-- `ABUNDANCE_DEFAULT_INTELLIGENCE`：默认 `standard`。
+- `ABUNDANCE_DEFAULT_SPEED`：默认 `standard`，可选 `standard`、`extended`。
+- `ABUNDANCE_DEFAULT_INTELLIGENCE`：默认 `medium`，可选 `minimal`、`low`、`medium`、`high`。
 - `ABUNDANCE_OIDC_TOKEN`：可选，通常不建议作为唯一登录凭据。
 - `ABUNDANCE_REQUEST_TIMEOUT_SECONDS`：默认 `120`。
 - `ABUNDANCE_CONNECT_KEEPALIVE_SECONDS`：默认 `15`，等待上游建立流式连接时发送 SSE keep-alive。

@@ -62,8 +62,32 @@ ABUNDANCE_BASE_URL = os.getenv("ABUNDANCE_BASE_URL", "https://a.b.u.n.dance").rs
 ABUNDANCE_RAW_COOKIE = os.getenv("ABUNDANCE_COOKIE", "").strip()
 ABUNDANCE_SESSION_COOKIE = os.getenv("ABUNDANCE_SESSION", "").strip()
 ABUNDANCE_OIDC_TOKEN = os.getenv("ABUNDANCE_OIDC_TOKEN", "").strip()
-ABUNDANCE_DEFAULT_SPEED = os.getenv("ABUNDANCE_DEFAULT_SPEED", "default")
-ABUNDANCE_DEFAULT_INTELLIGENCE = os.getenv("ABUNDANCE_DEFAULT_INTELLIGENCE", "standard")
+ABUNDANCE_SPEED_VALUES = {"standard", "extended"}
+ABUNDANCE_INTELLIGENCE_VALUES = {"minimal", "low", "medium", "high"}
+
+
+def normalize_abundance_option(name: str, value: str, allowed_values: set[str], fallback: str, aliases: Dict[str, str]) -> str:
+    normalized = aliases.get(value, value)
+    if normalized in allowed_values:
+        return normalized
+    logger.warning("Invalid %s=%s; falling back to %s", name, value, fallback)
+    return fallback
+
+
+ABUNDANCE_DEFAULT_SPEED = normalize_abundance_option(
+    "ABUNDANCE_DEFAULT_SPEED",
+    os.getenv("ABUNDANCE_DEFAULT_SPEED", "standard").strip(),
+    ABUNDANCE_SPEED_VALUES,
+    "standard",
+    {"default": "standard"}
+)
+ABUNDANCE_DEFAULT_INTELLIGENCE = normalize_abundance_option(
+    "ABUNDANCE_DEFAULT_INTELLIGENCE",
+    os.getenv("ABUNDANCE_DEFAULT_INTELLIGENCE", "medium").strip(),
+    ABUNDANCE_INTELLIGENCE_VALUES,
+    "medium",
+    {"standard": "medium"}
+)
 ABUNDANCE_IMPERSONATE = os.getenv("ABUNDANCE_IMPERSONATE", "chrome131")
 ABUNDANCE_REQUEST_TIMEOUT_SECONDS = env_int("ABUNDANCE_REQUEST_TIMEOUT_SECONDS", 120)
 ABUNDANCE_MAX_STATUS_RETRIES = env_int("ABUNDANCE_MAX_STATUS_RETRIES", 2)
