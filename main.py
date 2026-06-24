@@ -89,6 +89,7 @@ ABUNDANCE_DEFAULT_INTELLIGENCE = normalize_abundance_option(
     "medium",
     {"standard": "medium"}
 )
+ABUNDANCE_SEND_TUNING_FIELDS = os.getenv("ABUNDANCE_SEND_TUNING_FIELDS", "false").lower() not in {"0", "false", "no"}
 ABUNDANCE_IMPERSONATE = os.getenv("ABUNDANCE_IMPERSONATE", "chrome131")
 ABUNDANCE_REQUEST_TIMEOUT_SECONDS = env_int("ABUNDANCE_REQUEST_TIMEOUT_SECONDS", 120)
 ABUNDANCE_MAX_STATUS_RETRIES = env_int("ABUNDANCE_MAX_STATUS_RETRIES", 2)
@@ -1476,10 +1477,11 @@ def call_abundance_api(
         "content": content,
         "displayContent": content,
         "model": model,
-        "speed": speed or ABUNDANCE_DEFAULT_SPEED,
-        "intelligence": intelligence or ABUNDANCE_DEFAULT_INTELLIGENCE,
         "stream": True
     }
+    if ABUNDANCE_SEND_TUNING_FIELDS:
+        body["speed"] = speed or ABUNDANCE_DEFAULT_SPEED
+        body["intelligence"] = intelligence or ABUNDANCE_DEFAULT_INTELLIGENCE
     return abundance_post(url, body, stream=True, action="send-message")
 
 
